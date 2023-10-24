@@ -1,7 +1,7 @@
 package gpurunner
 
 // #cgo CFLAGS: -DCL_TARGET_OPENCL_VERSION=300
-// #cgo LDFLAGS: -lOpenCL -lnvrtc -lcudart
+// #cgo LDFLAGS: -lOpenCL -lcuda -lnvrtc -lcudart
 import "C"
 
 import "fmt"
