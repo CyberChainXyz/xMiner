@@ -1,6 +1,6 @@
 package gpurunner
 
-// #cgo CFLAGS: -DCL_TARGET_OPENCL_VERSION=300
+// #cgo CFLAGS: -DCL_TARGET_OPENCL_VERSION=120
 // #cgo LDFLAGS: -lOpenCL -lcuda -lnvrtc -lcudart
 import "C"
 

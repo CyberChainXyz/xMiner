@@ -77,7 +77,6 @@ func RunCuda(device *CudaDevice) error {
 		return fmt.Errorf("nvrtcGetPTX Err: %v", C.GoString(C.nvrtcGetErrorString(err)))
 	}
 
-
 	// Get kernel
 	var cu_err = C.cuInit(0)
 	if cu_err != C.CUDA_SUCCESS {
@@ -97,7 +96,7 @@ func RunCuda(device *CudaDevice) error {
 	if cu_err != C.CUDA_SUCCESS {
 		return fmt.Errorf("cuModuleGetFunction Err: %v", cu_err)
 	}
-	
+
 	// set kernel args
 	const NUM_BLOCKS = 32
 	const NUM_THREADS = 128
@@ -164,7 +163,7 @@ func RunCuda(device *CudaDevice) error {
 	if cu_err != C.CUDA_SUCCESS {
 		return fmt.Errorf("cuCtxSynchronize Err: %v", cu_err)
 	}
-	
+
 	// Copy data to host
 	cuda_err = C.cudaMemcpy(unsafe.Pointer(&hOut[0]), dOut, buffer_size, C.cudaMemcpyDeviceToHost)
 	if cuda_err != C.cudaSuccess {

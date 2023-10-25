@@ -6,7 +6,19 @@ import "C"
 import "fmt"
 import "unsafe"
 
-func Run(device *OpenCLDevice) error {
+type OpenCLRunner struct {
+	Device       *OpenCLDevice
+	Context      C.cl_context
+	CommandQueue C.cl_command_queue
+
+	Program C.cl_program
+	Kernels map[string]C.cl_kernel
+	Buffers []C.cl_mem
+}
+
+func (device *OpenCLDevice) InitRunner() (*OpenCLRunner, error) {
+	var runner = OpenCLRunner{Device: device}
+
 	// clCreateContext
 	var context_properties = [3]C.cl_context_properties{
 		C.CL_CONTEXT_PLATFORM,
@@ -16,96 +28,248 @@ func Run(device *OpenCLDevice) error {
 	var err C.cl_int
 	var context = C.clCreateContext(&context_properties[0], 1, &device.Device_id, nil, nil, &err)
 	if err != C.CL_SUCCESS {
-		return fmt.Errorf("clCreateContext Err: %v", err)
+		return nil, fmt.Errorf("clCreateContext Err: %v", err)
 	}
 
-	// clCreateCommandQueueWithProperties
-	var commandQueue = C.clCreateCommandQueueWithProperties(context, device.Device_id, nil, &err)
+	// clCreateCommandQueue
+	var commandQueueProperties C.cl_command_queue_properties = 0
+	var commandQueue = C.clCreateCommandQueue(context, device.Device_id, commandQueueProperties, &err)
 	if err != C.CL_SUCCESS {
-		return fmt.Errorf("clCreateCommandQueueWithProperties Err: %v", err)
+		C.clReleaseContext(context)
+		return nil, fmt.Errorf("clCreateCommandQueueErr: %v", err)
 	}
 
-	var code_src = C.CString(`
-		__kernel void helloworld(__global float* in, __global float* out)
-		 {
-			 int num = get_global_id(0);
-			 out[num] = in[num] / 24 *(in[num]/60) * in[num];
-		 }`)
-	defer C.free(unsafe.Pointer(code_src))
-	var codes = [1](*C.char){code_src}
+	runner.Context = context
+	runner.CommandQueue = commandQueue
+
+	return &runner, nil
+}
+
+func (runner *OpenCLRunner) Free() error {
+	var err C.cl_int
+
+	if len(runner.Kernels) > 0 {
+		for _, kernel := range runner.Kernels {
+			err = C.clReleaseKernel(kernel)
+		}
+	}
+
+	if runner.Program != nil {
+		err = C.clReleaseProgram(runner.Program)
+	}
+
+	if len(runner.Buffers) > 0 {
+		for _, buffer := range runner.Buffers {
+			err = C.clReleaseMemObject(buffer)
+		}
+	}
+
+	err = C.clReleaseCommandQueue(runner.CommandQueue)
+	err = C.clReleaseContext(runner.Context)
+
+	if err != C.CL_SUCCESS {
+		return fmt.Errorf("OpenCLRunner.Free cl_err: %v", err)
+	}
+
+	return nil
+}
+
+func (runner *OpenCLRunner) SetKernels(codeSourceList []string, kernelNameList []string, options string) error {
+	var codes [](*C.char)
+	for _, codeSource := range codeSourceList {
+		code_src := C.CString(codeSource)
+		defer C.free(unsafe.Pointer(code_src))
+		codes = append(codes, code_src)
+	}
+
+	var err C.cl_int
 
 	// clCreateProgramWithSource
-	var program = C.clCreateProgramWithSource(context, C.cl_uint(len(codes)), &codes[0], nil, &err)
-
+	var program = C.clCreateProgramWithSource(runner.Context, C.cl_uint(len(codes)), &codes[0], nil, &err)
 	if err != C.CL_SUCCESS {
 		return fmt.Errorf("clCreateProgramWithSource Err: %v", err)
 	}
 
+	cl_options := C.CString(options)
+	defer C.free(unsafe.Pointer(cl_options))
+
 	// clBuildProgram
-	options := C.CString("")
-	defer C.free(unsafe.Pointer(options))
-	err = C.clBuildProgram(program, 1, &device.Device_id, options, nil, nil)
+	err = C.clBuildProgram(program, 1, &runner.Device.Device_id, cl_options, nil, nil)
 	if err != C.CL_SUCCESS {
 		var logSize C.size_t
-		var err2 = C.clGetProgramBuildInfo(program, device.Device_id, C.CL_PROGRAM_BUILD_LOG, 0, nil, &logSize)
+		var err2 = C.clGetProgramBuildInfo(program, runner.Device.Device_id, C.CL_PROGRAM_BUILD_LOG, 0, nil, &logSize)
 		if err2 != C.CL_SUCCESS {
+			C.clReleaseProgram(program)
 			return fmt.Errorf("clGetProgramBuildInfo Err: %v", err2)
 		}
 
 		var log_buf = make([]byte, logSize, logSize)
-		err2 = C.clGetProgramBuildInfo(program, device.Device_id, C.CL_PROGRAM_BUILD_LOG, logSize, unsafe.Pointer(&log_buf[0]), nil)
+		err2 = C.clGetProgramBuildInfo(program, runner.Device.Device_id, C.CL_PROGRAM_BUILD_LOG, logSize, unsafe.Pointer(&log_buf[0]), nil)
 
 		if err2 != C.CL_SUCCESS {
+			C.clReleaseProgram(program)
 			return fmt.Errorf("clGetProgramBuildInfo Err: %v", err2)
 		}
 
 		fmt.Printf("clBuildProgram Err log: %s\n", string(log_buf))
 
+		C.clReleaseProgram(program)
 		return fmt.Errorf("clBuildProgram Err: %v", err)
 	}
 
 	// clCreateKernel
-	var kernel_name = C.CString("helloworld")
-	defer C.free(unsafe.Pointer(kernel_name))
-	var kernel = C.clCreateKernel(program, kernel_name, &err)
+	runner.Kernels = make(map[string]C.cl_kernel)
+	for _, kernelName := range kernelNameList {
+		var kernel_name = C.CString(kernelName)
+		defer C.free(unsafe.Pointer(kernel_name))
+
+		var kernel = C.clCreateKernel(program, kernel_name, &err)
+		if err != C.CL_SUCCESS {
+			C.clReleaseProgram(program)
+			return fmt.Errorf("clCreateKernel Err: %v", err)
+		}
+		runner.Kernels[kernelName] = kernel
+	}
+
+	runner.Program = program
+
+	return nil
+}
+
+const (
+	READ_WRITE     C.cl_mem_flags = C.CL_MEM_READ_WRITE
+	WRITE_ONLY                    = C.CL_MEM_WRITE_ONLY
+	READ_ONLY                     = C.CL_MEM_READ_ONLY
+	USE_HOST_PTR                  = C.CL_MEM_USE_HOST_PTR
+	ALLOC_HOST_PTR                = C.CL_MEM_ALLOC_HOST_PTR
+	COPY_HOST_PTR                 = C.CL_MEM_COPY_HOST_PTR
+)
+
+type Char C.cl_char
+type Uchar C.cl_uchar
+type Short C.cl_short
+type Ushort C.cl_ushort
+type Int C.cl_int
+type Uint C.cl_uint
+type Long C.cl_long
+type Ulong C.cl_ulong
+type Float C.cl_float
+type Double C.cl_double
+
+func CreateBuffer[E any](runner *OpenCLRunner, flags C.cl_mem_flags, source []E) (C.cl_mem, error) {
+	if len(source) == 0 {
+		return nil, fmt.Errorf("clCreateBuffer Err: source is empty")
+	}
+	var err C.cl_int
+	size := C.size_t(int(unsafe.Sizeof(source[0])) * len(source))
+	host_ptr := unsafe.Pointer(&source[0])
+	buffer := C.clCreateBuffer(runner.Context, flags, size, host_ptr, &err)
 	if err != C.CL_SUCCESS {
-		return fmt.Errorf("clCreateKernel Err: %v", err)
+		return nil, fmt.Errorf("clCreateBuffer Err: %v", err)
+	}
+	runner.Buffers = append(runner.Buffers, buffer)
+	return buffer, nil
+}
+
+func (runner *OpenCLRunner) CreateEmptyBuffer(flags C.cl_mem_flags, size int) (C.cl_mem, error) {
+	var err C.cl_int
+	buffer := C.clCreateBuffer(runner.Context, flags, C.size_t(size), nil, &err)
+	if err != C.CL_SUCCESS {
+		return nil, fmt.Errorf("clCreateBuffer Err: %v", err)
+	}
+	runner.Buffers = append(runner.Buffers, buffer)
+	return buffer, nil
+}
+
+func ReadBuffer[E any](runner *OpenCLRunner, buffer C.cl_mem, target []E) error {
+	if len(target) == 0 {
+		return fmt.Errorf("clEnqueueReadBuffer Err: target is nil")
+	}
+	err := C.clEnqueueReadBuffer(runner.CommandQueue, buffer, C.CL_TRUE, 0,
+		C.size_t(int(unsafe.Sizeof(target[0]))*len(target)),
+		unsafe.Pointer(&target[0]), 0, nil, nil)
+	if err != C.CL_SUCCESS {
+		return fmt.Errorf("clEnqueueReadBuffer Err: %v", err)
+	}
+	return nil
+}
+
+func WriteBuffer[E any](runner *OpenCLRunner, buffer C.cl_mem, source []E) error {
+	if len(source) == 0 {
+		return fmt.Errorf("clEnqueueWriteBuffer Err: source is empty")
+	}
+	err := C.clEnqueueWriteBuffer(runner.CommandQueue, buffer, C.CL_TRUE, 0,
+		C.size_t(int(unsafe.Sizeof(source[0]))*len(source)), unsafe.Pointer(&source[0]), 0, nil, nil)
+	if err != C.CL_SUCCESS {
+		return fmt.Errorf("clEnqueueWriteBuffer Err: %v", err)
+	}
+	return nil
+}
+
+func (runner *OpenCLRunner) ReleaseBuffer(buffer C.cl_mem) error {
+	err := C.clReleaseMemObject(buffer)
+	if err != C.CL_SUCCESS {
+		return fmt.Errorf("clReleaseMemObject Err: %v", err)
+	}
+	return nil
+}
+
+func map_size_t[E int](slice []E) []C.size_t {
+	size_t_slice := make([]C.size_t, len(slice), len(slice))
+	for i, v := range slice {
+		size_t_slice[i] = C.size_t(v)
+	}
+	return size_t_slice
+}
+
+type KernelParam struct {
+	Size    uintptr
+	Pointer unsafe.Pointer
+}
+
+func Param[E any](v *E) KernelParam {
+	return KernelParam{Size: unsafe.Sizeof(*v), Pointer: unsafe.Pointer(v)}
+}
+
+func (runner *OpenCLRunner) RunKernel(kernelName string, work_dim int,
+	global_work_offset []int, global_work_size []int, local_work_size []int, args []KernelParam) error {
+	var kernel = runner.Kernels[kernelName]
+	var err C.cl_int
+	for i, arg := range args {
+		err = C.clSetKernelArg(kernel, C.cl_uint(i), C.size_t(arg.Size), arg.Pointer)
+		if err != C.CL_SUCCESS {
+			return fmt.Errorf("clSetKernelArg Err: %v", err)
+		}
 	}
 
-	const NUM = 1000
-	var input = [NUM]C.float{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	var output = [NUM]C.float{}
-	for i, _ := range input {
-		input[i] = C.float(float32(i + 1))
+	var global_work_offset_ptr, global_work_size_ptr, local_work_size_ptr *C.size_t = nil, nil, nil
+
+	if len(global_work_offset) != 0 {
+		_global_work_offset := map_size_t(global_work_offset)
+		global_work_offset_ptr = &_global_work_offset[0]
 	}
 
-	// clCreateBuffer
-	var inputBuffer = C.clCreateBuffer(context, C.CL_MEM_READ_ONLY|C.CL_MEM_COPY_HOST_PTR, C.size_t(unsafe.Sizeof(input[0])*NUM), unsafe.Pointer(&input[0]), &err)
-	var outputBuffer = C.clCreateBuffer(context, C.CL_MEM_WRITE_ONLY, C.size_t(unsafe.Sizeof(input[0])*NUM), nil, &err)
-	// clSetKernelArg
-	err = C.clSetKernelArg(kernel, 0, C.sizeof_cl_mem, unsafe.Pointer(&inputBuffer))
-	err = C.clSetKernelArg(kernel, 1, C.sizeof_cl_mem, unsafe.Pointer(&outputBuffer))
+	if len(global_work_size) != 0 {
+		_global_work_size := map_size_t(global_work_size)
+		global_work_size_ptr = &_global_work_size[0]
+	}
 
-	// clEnqueueNDRangeKernel
+	if len(local_work_size) != 0 {
+		_local_work_size := map_size_t(local_work_size)
+		local_work_size_ptr = &_local_work_size[0]
+	}
+
 	var evt C.cl_event
-	var items C.size_t = 15
-	err = C.clEnqueueNDRangeKernel(commandQueue, kernel, 1, nil, &items, nil, 0, nil, &evt)
+	defer C.clReleaseEvent(evt)
+	err = C.clEnqueueNDRangeKernel(runner.CommandQueue, kernel, C.cl_uint(work_dim),
+		global_work_offset_ptr, global_work_size_ptr, local_work_size_ptr, 0, nil, &evt)
+	if err != C.CL_SUCCESS {
+		return fmt.Errorf("clEnqueueNDRangeKernel Err: %v", err)
+	}
 	err = C.clWaitForEvents(1, &evt)
-	err = C.clReleaseEvent(evt)
-
-	// clEnqueueReadBuffer
-	err = C.clEnqueueReadBuffer(commandQueue, outputBuffer, C.CL_TRUE, 0, C.size_t(unsafe.Sizeof(input[0])*NUM), unsafe.Pointer(&output[0]), 0, nil, nil)
-
-	// clean
-
-	err = C.clReleaseMemObject(inputBuffer)
-	err = C.clReleaseMemObject(outputBuffer)
-	err = C.clReleaseKernel(kernel)
-	err = C.clReleaseProgram(program)
-	err = C.clReleaseCommandQueue(commandQueue)
-	err = C.clReleaseContext(context)
-
-	fmt.Println(output[:20])
+	if err != C.CL_SUCCESS {
+		return fmt.Errorf("clWaitForEvents Err: %v", err)
+	}
 
 	return nil
 }
