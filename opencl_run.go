@@ -6,6 +6,10 @@ import "C"
 import "fmt"
 import "unsafe"
 
+type Buffer struct {
+	buffer C.cl_mem
+}
+
 type OpenCLRunner struct {
 	Device       *OpenCLDevice
 	Context      C.cl_context
@@ -13,7 +17,7 @@ type OpenCLRunner struct {
 
 	Program C.cl_program
 	Kernels map[string]C.cl_kernel
-	Buffers []C.cl_mem
+	Buffers []*Buffer
 }
 
 func (device *OpenCLDevice) InitRunner() (*OpenCLRunner, error) {
@@ -60,7 +64,7 @@ func (runner *OpenCLRunner) Free() error {
 
 	if len(runner.Buffers) > 0 {
 		for _, buffer := range runner.Buffers {
-			err = C.clReleaseMemObject(buffer)
+			err = C.clReleaseMemObject(buffer.buffer)
 		}
 	}
 
@@ -74,7 +78,7 @@ func (runner *OpenCLRunner) Free() error {
 	return nil
 }
 
-func (runner *OpenCLRunner) SetKernels(codeSourceList []string, kernelNameList []string, options string) error {
+func (runner *OpenCLRunner) CompileKernels(codeSourceList []string, kernelNameList []string, options string) error {
 	var codes [](*C.char)
 	for _, codeSource := range codeSourceList {
 		code_src := C.CString(codeSource)
@@ -145,47 +149,39 @@ const (
 	COPY_HOST_PTR                 = C.CL_MEM_COPY_HOST_PTR
 )
 
-type Char C.cl_char
-type Uchar C.cl_uchar
-type Short C.cl_short
-type Ushort C.cl_ushort
-type Int C.cl_int
-type Uint C.cl_uint
-type Long C.cl_long
-type Ulong C.cl_ulong
-type Float C.cl_float
-type Double C.cl_double
-
-func CreateBuffer[E any](runner *OpenCLRunner, flags C.cl_mem_flags, source []E) (C.cl_mem, error) {
+func CreateBuffer[E any](runner *OpenCLRunner, flags C.cl_mem_flags, source []E) (*Buffer, error) {
 	if len(source) == 0 {
 		return nil, fmt.Errorf("clCreateBuffer Err: source is empty")
 	}
 	var err C.cl_int
 	size := C.size_t(int(unsafe.Sizeof(source[0])) * len(source))
 	host_ptr := unsafe.Pointer(&source[0])
-	buffer := C.clCreateBuffer(runner.Context, flags, size, host_ptr, &err)
+	cl_mem := C.clCreateBuffer(runner.Context, flags, size, host_ptr, &err)
 	if err != C.CL_SUCCESS {
 		return nil, fmt.Errorf("clCreateBuffer Err: %v", err)
 	}
+
+	buffer := &Buffer{cl_mem}
 	runner.Buffers = append(runner.Buffers, buffer)
 	return buffer, nil
 }
 
-func (runner *OpenCLRunner) CreateEmptyBuffer(flags C.cl_mem_flags, size int) (C.cl_mem, error) {
+func (runner *OpenCLRunner) CreateEmptyBuffer(flags C.cl_mem_flags, size int) (*Buffer, error) {
 	var err C.cl_int
-	buffer := C.clCreateBuffer(runner.Context, flags, C.size_t(size), nil, &err)
+	cl_mem := C.clCreateBuffer(runner.Context, flags, C.size_t(size), nil, &err)
 	if err != C.CL_SUCCESS {
 		return nil, fmt.Errorf("clCreateBuffer Err: %v", err)
 	}
+	buffer := &Buffer{cl_mem}
 	runner.Buffers = append(runner.Buffers, buffer)
 	return buffer, nil
 }
 
-func ReadBuffer[E any](runner *OpenCLRunner, buffer C.cl_mem, target []E) error {
+func ReadBuffer[E any](runner *OpenCLRunner, offset int, buffer *Buffer, target []E) error {
 	if len(target) == 0 {
 		return fmt.Errorf("clEnqueueReadBuffer Err: target is nil")
 	}
-	err := C.clEnqueueReadBuffer(runner.CommandQueue, buffer, C.CL_TRUE, 0,
+	err := C.clEnqueueReadBuffer(runner.CommandQueue, buffer.buffer, C.CL_TRUE, C.size_t(offset),
 		C.size_t(int(unsafe.Sizeof(target[0]))*len(target)),
 		unsafe.Pointer(&target[0]), 0, nil, nil)
 	if err != C.CL_SUCCESS {
@@ -194,11 +190,15 @@ func ReadBuffer[E any](runner *OpenCLRunner, buffer C.cl_mem, target []E) error 
 	return nil
 }
 
-func WriteBuffer[E any](runner *OpenCLRunner, buffer C.cl_mem, source []E) error {
+func WriteBuffer[E any](runner *OpenCLRunner, offset int, buffer *Buffer, source []E, blocking bool) error {
 	if len(source) == 0 {
 		return fmt.Errorf("clEnqueueWriteBuffer Err: source is empty")
 	}
-	err := C.clEnqueueWriteBuffer(runner.CommandQueue, buffer, C.CL_TRUE, 0,
+	var _blocking C.cl_bool = C.CL_FALSE
+	if blocking {
+		_blocking = C.CL_TRUE
+	} 
+	err := C.clEnqueueWriteBuffer(runner.CommandQueue, buffer.buffer, _blocking, C.size_t(offset),
 		C.size_t(int(unsafe.Sizeof(source[0]))*len(source)), unsafe.Pointer(&source[0]), 0, nil, nil)
 	if err != C.CL_SUCCESS {
 		return fmt.Errorf("clEnqueueWriteBuffer Err: %v", err)
@@ -206,8 +206,8 @@ func WriteBuffer[E any](runner *OpenCLRunner, buffer C.cl_mem, source []E) error
 	return nil
 }
 
-func (runner *OpenCLRunner) ReleaseBuffer(buffer C.cl_mem) error {
-	err := C.clReleaseMemObject(buffer)
+func (runner *OpenCLRunner) ReleaseBuffer(buffer *Buffer) error {
+	err := C.clReleaseMemObject(buffer.buffer)
 	if err != C.CL_SUCCESS {
 		return fmt.Errorf("clReleaseMemObject Err: %v", err)
 	}
@@ -227,12 +227,16 @@ type KernelParam struct {
 	Pointer unsafe.Pointer
 }
 
+func BufferParam(v *Buffer) KernelParam {
+	return KernelParam{Size: unsafe.Sizeof(v.buffer), Pointer: unsafe.Pointer(&v.buffer)}
+}
+
 func Param[E any](v *E) KernelParam {
 	return KernelParam{Size: unsafe.Sizeof(*v), Pointer: unsafe.Pointer(v)}
 }
 
 func (runner *OpenCLRunner) RunKernel(kernelName string, work_dim int,
-	global_work_offset []int, global_work_size []int, local_work_size []int, args []KernelParam) error {
+	global_work_offset []int, global_work_size []int, local_work_size []int, args []KernelParam, wait bool) error {
 	var kernel = runner.Kernels[kernelName]
 	var err C.cl_int
 	for i, arg := range args {
@@ -258,17 +262,24 @@ func (runner *OpenCLRunner) RunKernel(kernelName string, work_dim int,
 		_local_work_size := map_size_t(local_work_size)
 		local_work_size_ptr = &_local_work_size[0]
 	}
-
-	var evt C.cl_event
-	defer C.clReleaseEvent(evt)
+	
+	var evt *C.cl_event = nil
+	if wait {
+		var evt_obj C.cl_event
+		evt = &evt_obj
+		defer C.clReleaseEvent(evt_obj)
+	}
 	err = C.clEnqueueNDRangeKernel(runner.CommandQueue, kernel, C.cl_uint(work_dim),
-		global_work_offset_ptr, global_work_size_ptr, local_work_size_ptr, 0, nil, &evt)
+		global_work_offset_ptr, global_work_size_ptr, local_work_size_ptr, 0, nil, evt)
 	if err != C.CL_SUCCESS {
 		return fmt.Errorf("clEnqueueNDRangeKernel Err: %v", err)
 	}
-	err = C.clWaitForEvents(1, &evt)
-	if err != C.CL_SUCCESS {
-		return fmt.Errorf("clWaitForEvents Err: %v", err)
+	
+	if wait {
+		err = C.clWaitForEvents(1, evt)
+		if err != C.CL_SUCCESS {
+			return fmt.Errorf("clWaitForEvents Err: %v", err)
+		}
 	}
 
 	return nil

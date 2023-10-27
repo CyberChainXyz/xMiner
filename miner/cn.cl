@@ -344,8 +344,6 @@ void keccakf1600_2(__local ulong *st)
 	}
 }
 
-#define MEM_CHUNK (1<<MEM_CHUNK_EXPONENT)
-
 #   define IDX(x)	(x)
 
 inline uint getIdx()

@@ -26,7 +26,6 @@ func main() {
 				 out[num] = out[num] / (factor-7) + in[num] / factor;
 		 }`
 
-
 	// InitRunner
 	device := &gpus.OpenCL.Platforms[0].Devices[0]
 	t := time.Now()
@@ -37,14 +36,14 @@ func main() {
 	}
 	defer runner.Free()
 
-	// SetKernels
+	// CompileKernels
 	codes := []string{code}
 	kernelNameList := []string{"helloworld"}
 	t = time.Now()
-	err = runner.SetKernels(codes, kernelNameList, "")
-	fmt.Println("SetKernels: ", time.Since(t))
+	err = runner.CompileKernels(codes, kernelNameList, "")
+	fmt.Println("CompileKernels: ", time.Since(t))
 	if err != nil {
-		log.Fatalln("SetKernels err:", err)
+		log.Fatalln("CompileKernels err:", err)
 	}
 
 	// create kernel params
@@ -60,36 +59,35 @@ func main() {
 	}
 	/* buffer 2 param */
 	t = time.Now()
-	buf_2, err := runner.CreateEmptyBuffer(gpu.WRITE_ONLY, itemCount * itemSize)
+	buf_2, err := runner.CreateEmptyBuffer(gpu.WRITE_ONLY, itemCount*itemSize)
 	fmt.Println("CreateEmptyBuffer: ", time.Since(t))
 	if err != nil {
 		log.Fatalln("CreateEmptyBuffer err:", err)
 	}
 	/* factor param */
 	var factor gpu.Int = 13
-	
+
 	// RunKernel
 	t = time.Now()
-	err = runner.RunKernel("helloworld", 1, nil, []int{itemCount}, nil, []gpu.KernelParam{ 
+	err = runner.RunKernel("helloworld", 1, nil, []int{itemCount}, nil, []gpu.KernelParam{
 		gpu.Param(&buf_1),
 		gpu.Param(&buf_2),
 		gpu.Param(&factor),
-	})
+	}, true)
 	fmt.Println("RunKernel: ", time.Since(t))
 	if err != nil {
 		log.Fatalln("RunKernel err:", err)
 	}
-	
+
 	// ReadBuffer
 	output := make([]gpu.Float, len(input))
 	t = time.Now()
-	err = gpu.ReadBuffer(runner, buf_2, output)
+	err = gpu.ReadBuffer(runner, 0, buf_2, output)
 	fmt.Println("ReadBuffer: ", time.Since(t))
 	if err != nil {
 		log.Fatalln("ReadBuffer err:", err)
 	}
-	
+
 	// Show Result
 	fmt.Println(output)
 }
-
