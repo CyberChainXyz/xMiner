@@ -47,10 +47,10 @@ func main() {
 	}
 
 	// create kernel params
-	itemSize := int(unsafe.Sizeof(gpu.Float(0)))
+	itemSize := int(unsafe.Sizeof(float32(0)))
 	itemCount := 15
 	/* buffer 1 param */
-	input := []gpu.Float{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	input := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	t = time.Now()
 	buf_1, err := gpu.CreateBuffer(runner, gpu.READ_ONLY|gpu.COPY_HOST_PTR, input)
 	fmt.Println("CreateBuffer: ", time.Since(t))
@@ -65,13 +65,13 @@ func main() {
 		log.Fatalln("CreateEmptyBuffer err:", err)
 	}
 	/* factor param */
-	var factor gpu.Int = 13
+	var factor int32 = 13
 
 	// RunKernel
 	t = time.Now()
 	err = runner.RunKernel("helloworld", 1, nil, []int{itemCount}, nil, []gpu.KernelParam{
-		gpu.Param(&buf_1),
-		gpu.Param(&buf_2),
+		gpu.BufferParam(buf_1),
+		gpu.BufferParam(buf_2),
 		gpu.Param(&factor),
 	}, true)
 	fmt.Println("RunKernel: ", time.Since(t))
@@ -80,7 +80,7 @@ func main() {
 	}
 
 	// ReadBuffer
-	output := make([]gpu.Float, len(input))
+	output := make([]float32, len(input))
 	t = time.Now()
 	err = gpu.ReadBuffer(runner, 0, buf_2, output)
 	fmt.Println("ReadBuffer: ", time.Since(t))

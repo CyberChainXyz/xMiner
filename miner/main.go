@@ -1,16 +1,16 @@
 package main
 
 import gpu "github.com/dextech/gpu-runner"
-import "github.com/kr/pretty"
+// import "github.com/kr/pretty"
 
 import "log"
 import "fmt"
 import "time"
 import _ "embed"
 import "math"
-import "sort"
 // import "unsafe"
 // import "math/bits"
+import "encoding/binary"
 
 import "example.com/cn-gpu-go"
 
@@ -26,7 +26,7 @@ func main() {
 	// fmt.Println(unsafe.Sizeof(uint(0)))
 	//fmt.Println(bits.UintSize)
 	gpus := gpu.GetAllGpusInfo()
-	pretty.Println(gpus)
+	// pretty.Println(gpus)
 
 	if len(gpus.OpenCL.Platforms) < 1 {
 		log.Fatalln("No OpenCL Devices")
@@ -64,7 +64,7 @@ func main() {
 		log.Fatalln("CompileKernels err:", err)
 	}
 
-	maxThreads *= 32
+	// maxThreads *= 32
 
 	// create buffers
 	g_thd := maxThreads
@@ -79,23 +79,19 @@ func main() {
 		log.Fatalln("CreateBuffer err:", err)
 	}
 
-	// input
-	var source = []byte{1, 2, 3, 4, 5, 6, 7, 8}
+	// source
+	var source = make([]byte, 60, 60)
+	for i := 0; i<len(source); i++ {
+		source[i] = byte(i)
+	}
 	// Target
-	var target uint64 = math.MaxUint64 / 100000
+	var target uint64 = math.MaxUint64 / 10000
 	// nonce
 	var startNonce uint32 = 0
 
 	nonce_list := hash_iter(runner, source, startNonce, target, compMode, workSize, maxThreads, 
 		input_buf, output_buf, scratchpads_buf, states_buf)
 	fmt.Println("nonce_list:", nonce_list)
-
-	// cpu hash
-	// source_1 := append(source, 0, 0, 73, 233)
-	source_1 := append(source, 0, 0, 5, 12)
-	hash := cngpugo.Hash(source_1)
-	fmt.Println("hash:", hash)
-
 
 }
 
@@ -109,7 +105,7 @@ func hash_iter(runner *gpu.OpenCLRunner, source []byte, startNonce uint32, targe
 	copy(input[:input_len], source)
 	input[input_len] = 0x01
 	// numThreads
-	numThreads := maxThreads
+	numThreads := uint32(maxThreads)
 	// output
 	var output = make([]uint32, 0x100, 0x100)
 	
@@ -173,19 +169,19 @@ func hash_iter(runner *gpu.OpenCLRunner, source []byte, startNonce uint32, targe
 	}
 
 	t = time.Now()
-	err = runner.RunKernel("cn0_cn_gpu", 2, []int{int(startNonce), 1}, []int{g_thd, 8}, []int{8, 8}, k0_args, false)
+    err = runner.RunKernel("cn0_cn_gpu", 2, []int{int(startNonce), 1}, []int{g_thd, 8}, []int{8, 8}, k0_args, true)
 	fmt.Println("RunKernel cn0_cn_gpu: ", time.Since(t))
 
 	t = time.Now()
-	err = runner.RunKernel("cn00_cn_gpu", 1, nil, []int{g_intensity * 64}, []int{64}, k00_args, false)
+	err = runner.RunKernel("cn00_cn_gpu", 1, nil, []int{g_intensity * 64}, []int{64}, k00_args, true)
 	fmt.Println("RunKernel cn00_cn_gpu: ", time.Since(t))
 
 	t = time.Now()
-	err = runner.RunKernel("cn1_cn_gpu", 1, nil, []int{g_thd * 16}, []int{w_size * 16}, k1_args, false)
+	err = runner.RunKernel("cn1_cn_gpu", 1, nil, []int{g_thd * 16}, []int{w_size * 16}, k1_args, true)
 	fmt.Println("RunKernel cn1_cn_gpu: ", time.Since(t))
 
 	t = time.Now()
-	err = runner.RunKernel("cn2", 2, []int{0, int(startNonce)}, []int{8, g_thd}, []int{8, w_size}, k2_args, false)
+	err = runner.RunKernel("cn2", 2, []int{0, int(startNonce)}, []int{8, g_thd}, []int{8, w_size}, k2_args, true)
 	fmt.Println("RunKernel cn2: ", time.Since(t))
 
 	if err != nil {
@@ -201,18 +197,17 @@ func hash_iter(runner *gpu.OpenCLRunner, source []byte, startNonce uint32, targe
 	}
 	resultCount := min(output[0xFF], 0xFF)
 
-	var states []([]uint64)
-	for i := 0; i < maxThreads; i++ {
-		var state = make([]uint64, 4, 4)
-		err = gpu.ReadBuffer(runner, 200 *i, states_buf, state)
-		states = append(states, state)
-	}
-
-	sort.Slice(states, func(i, j int) bool {
-		return states[i][3] < states[j][3]
-	})
-	for _, state := range states[:resultCount] {
-		fmt.Println(state)
+	for i := 0; i < int(resultCount); i++ {
+		nonceBytes := make([]byte, 4, 4)
+		binary.LittleEndian.PutUint32(nonceBytes, output[i])
+		offset := 39
+		source[offset] = nonceBytes[0]
+		source[offset + 1] = nonceBytes[1]
+		source[offset + 2] = nonceBytes[2]
+		source[offset + 3] = nonceBytes[3]
+		// cpu hash
+		hash := cngpugo.Hash(source)
+		fmt.Printf("nonce: %d, diff: %d\n", output[i], math.MaxUint64/binary.LittleEndian.Uint64(hash[24:]))
 	}
 
 	// Show Result
