@@ -1,11 +1,11 @@
-package gpurunner
+package cuda
 
-// #include "gpu.h"
+// #include "cu.h"
 import "C"
 
 import "fmt"
 
-func getCudaInfo() (*CudaInfo, error) {
+func Info() (*CudaInfo, error) {
 	var info CudaInfo
 
 	info.Cudart_version = C.CUDART_VERSION

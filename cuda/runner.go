@@ -1,10 +1,12 @@
-package gpurunner
+package cuda
 
-// #include "gpu.h"
+// #include "cu.h"
 import "C"
 
-import "fmt"
-import "unsafe"
+import (
+	"fmt"
+	"unsafe"
+)
 
 func RunCuda(device *CudaDevice) error {
 	var cu_code = C.CString(`

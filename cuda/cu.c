@@ -1,4 +1,4 @@
-#include "gpu.h"
+#include "cu.h"
 
 cudaError_t tryCudaMalloc(int* tmp) {
 	return cudaMalloc((void **)&tmp, 256);

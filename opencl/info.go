@@ -1,11 +1,13 @@
-package gpurunner
+package opencl
 
-// #include "gpu.h"
+// #include "cl.h"
 import "C"
 
-import "fmt"
-import "unsafe"
-import "strings"
+import (
+	"fmt"
+	"strings"
+	"unsafe"
+)
 
 func getOneDevie(platform_id C.cl_platform_id, device_id C.cl_device_id) (*OpenCLDevice, error) {
 	var device = OpenCLDevice{Platform_id: platform_id, Device_id: device_id}
@@ -202,7 +204,7 @@ func getOnePlatform(platform_id C.cl_platform_id) (*OpenCLPlatform, error) {
 	return &platform, nil
 }
 
-func getOpenCLInfo() (*OpenCLInfo, error) {
+func Info() (*OpenCLInfo, error) {
 	var info OpenCLInfo
 
 	var err = C.clGetPlatformIDs(0, nil, &info.Platform_count)

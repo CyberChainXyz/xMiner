@@ -1,20 +1,15 @@
 package main
 
-import gpu "github.com/dextech/gpu-runner"
-
-// import "github.com/kr/pretty"
-
-import "log"
-import "fmt"
-import "time"
-import _ "embed"
-import "math"
-
-// import "unsafe"
-// import "math/bits"
-import "encoding/binary"
-
-import "example.com/cn-gpu-go"
+import (
+	cl "github.com/dextech/gpu-runner/opencl"
+	_ "embed"
+	"fmt"
+	"log"
+	"math"
+	"time"
+	"encoding/binary"
+	"example.com/cn-gpu-go"
+)
 
 //go:embed cn.cl
 var code string
@@ -25,20 +20,17 @@ const MASK = ((MEMORY - 1) >> 6) << 6
 const NonceLen = 4
 
 func main() {
-	// fmt.Println(unsafe.Sizeof(uint(0)))
-	//fmt.Println(bits.UintSize)
-	gpus := gpu.GetAllGpusInfo()
-	// pretty.Println(gpus)
+	info, _ := cl.Info()
 
-	if len(gpus.OpenCL.Platforms) < 1 {
+	if len(info.Platforms) < 1 {
 		log.Fatalln("No OpenCL Devices")
 	}
-	if len(gpus.OpenCL.Platforms[0].Devices) < 1 {
+	if len(info.Platforms[0].Devices) < 1 {
 		log.Fatalln("No OpenCL Devices")
 	}
 
 	// InitRunner
-	device := &gpus.OpenCL.Platforms[0].Devices[0]
+	device := &info.Platforms[0].Devices[0]
 	t := time.Now()
 	runner, err := device.InitRunner()
 	fmt.Println("InitRunner: ", time.Since(t))
@@ -71,10 +63,10 @@ func main() {
 	g_thd := maxThreads
 	scratchPadSize := MEMORY
 	t = time.Now()
-	input_buf, err := runner.CreateEmptyBuffer(gpu.READ_ONLY, 128)
-	scratchpads_buf, err := runner.CreateEmptyBuffer(gpu.READ_WRITE, scratchPadSize*g_thd)
-	states_buf, err := runner.CreateEmptyBuffer(gpu.READ_WRITE, 200*g_thd)
-	output_buf, err := runner.CreateEmptyBuffer(gpu.READ_WRITE, NonceLen*0x100)
+	input_buf, err := runner.CreateEmptyBuffer(cl.READ_ONLY, 128)
+	scratchpads_buf, err := runner.CreateEmptyBuffer(cl.READ_WRITE, scratchPadSize*g_thd)
+	states_buf, err := runner.CreateEmptyBuffer(cl.READ_WRITE, 200*g_thd)
+	output_buf, err := runner.CreateEmptyBuffer(cl.READ_WRITE, NonceLen*0x100)
 	fmt.Println("CreateBuffer:", time.Since(t))
 	if err != nil {
 		log.Fatalln("CreateBuffer err:", err)
@@ -126,8 +118,8 @@ func main() {
 
 }
 
-func setJob(runner *gpu.OpenCLRunner, source []byte, target uint64, maxThreads int,
-	input_buf *gpu.Buffer, output_buf *gpu.Buffer, scratchpads_buf *gpu.Buffer, states_buf *gpu.Buffer) error {
+func setJob(runner *cl.OpenCLRunner, source []byte, target uint64, maxThreads int,
+	input_buf *cl.Buffer, output_buf *cl.Buffer, scratchpads_buf *cl.Buffer, states_buf *cl.Buffer) error {
 
 	// input
 	input := make([]byte, 128, 128)
@@ -139,40 +131,40 @@ func setJob(runner *gpu.OpenCLRunner, source []byte, target uint64, maxThreads i
 
 	// set input buffer
 	t := time.Now()
-	err := gpu.WriteBuffer(runner, 0, input_buf, input, true)
+	err := cl.WriteBuffer(runner, 0, input_buf, input, true)
 	fmt.Println("WriteBuffer input_buf: ", time.Since(t))
 	if err != nil {
 		return fmt.Errorf("WriteBuffer input_buf err: %v", err)
 	}
 
 	// kernel params
-	k0_args := []gpu.KernelParam{
-		gpu.BufferParam(input_buf),
-		gpu.BufferParam(scratchpads_buf),
-		gpu.BufferParam(states_buf),
-		gpu.Param(&numThreads),
+	k0_args := []cl.KernelParam{
+		cl.BufferParam(input_buf),
+		cl.BufferParam(scratchpads_buf),
+		cl.BufferParam(states_buf),
+		cl.Param(&numThreads),
 	}
 
 	// kernel params
-	k00_args := []gpu.KernelParam{
-		gpu.BufferParam(scratchpads_buf),
-		gpu.BufferParam(states_buf),
+	k00_args := []cl.KernelParam{
+		cl.BufferParam(scratchpads_buf),
+		cl.BufferParam(states_buf),
 	}
 
 	// kernel params
-	k1_args := []gpu.KernelParam{
-		gpu.BufferParam(scratchpads_buf),
-		gpu.BufferParam(states_buf),
-		gpu.Param(&numThreads),
+	k1_args := []cl.KernelParam{
+		cl.BufferParam(scratchpads_buf),
+		cl.BufferParam(states_buf),
+		cl.Param(&numThreads),
 	}
 
 	// kernel params
-	k2_args := []gpu.KernelParam{
-		gpu.BufferParam(scratchpads_buf),
-		gpu.BufferParam(states_buf),
-		gpu.BufferParam(output_buf),
-		gpu.Param(&target),
-		gpu.Param(&numThreads),
+	k2_args := []cl.KernelParam{
+		cl.BufferParam(scratchpads_buf),
+		cl.BufferParam(states_buf),
+		cl.BufferParam(output_buf),
+		cl.Param(&target),
+		cl.Param(&numThreads),
 	}
 
 	t = time.Now()
@@ -187,9 +179,9 @@ func setJob(runner *gpu.OpenCLRunner, source []byte, target uint64, maxThreads i
 	return nil
 }
 
-func runJob(runner *gpu.OpenCLRunner, source []byte, startNonce uint32, target uint64,
+func runJob(runner *cl.OpenCLRunner, source []byte, startNonce uint32, target uint64,
 	compMode int, workSize int, maxThreads int,
-	input_buf *gpu.Buffer, output_buf *gpu.Buffer, scratchpads_buf *gpu.Buffer, states_buf *gpu.Buffer) ([]uint32, error) {
+	input_buf *cl.Buffer, output_buf *cl.Buffer, scratchpads_buf *cl.Buffer, states_buf *cl.Buffer) ([]uint32, error) {
 
 	// output
 	var output = make([]uint32, 0x100, 0x100)
@@ -209,7 +201,7 @@ func runJob(runner *gpu.OpenCLRunner, source []byte, startNonce uint32, target u
 	}
 
 	t := time.Now()
-	err := gpu.WriteBuffer(runner, NonceLen*0xFF, output_buf, []uint32{0}, false)
+	err := cl.WriteBuffer(runner, NonceLen*0xFF, output_buf, []uint32{0}, false)
 	fmt.Println("WriteBuffer output_buf reset: ", time.Since(t))
 	if err != nil {
 		return nil, fmt.Errorf("WriteBuffer output_buf err: %v", err)
@@ -237,7 +229,7 @@ func runJob(runner *gpu.OpenCLRunner, source []byte, startNonce uint32, target u
 
 	// ReadBuffer
 	t = time.Now()
-	err = gpu.ReadBuffer(runner, 0, output_buf, output)
+	err = cl.ReadBuffer(runner, 0, output_buf, output)
 	fmt.Println("ReadBuffer output_buf: ", time.Since(t))
 	if err != nil {
 		return nil, fmt.Errorf("ReadBuffer output_buf err: %v", err)

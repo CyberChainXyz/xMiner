@@ -1,10 +1,12 @@
-package gpurunner
+package opencl
 
-// #include "gpu.h"
+// #include "cl.h"
 import "C"
 
-import "fmt"
-import "unsafe"
+import (
+	"fmt"
+	"unsafe"
+)
 
 type Buffer struct {
 	buffer C.cl_mem
