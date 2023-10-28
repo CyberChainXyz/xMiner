@@ -197,7 +197,7 @@ func WriteBuffer[E any](runner *OpenCLRunner, offset int, buffer *Buffer, source
 	var _blocking C.cl_bool = C.CL_FALSE
 	if blocking {
 		_blocking = C.CL_TRUE
-	} 
+	}
 	err := C.clEnqueueWriteBuffer(runner.CommandQueue, buffer.buffer, _blocking, C.size_t(offset),
 		C.size_t(int(unsafe.Sizeof(source[0]))*len(source)), unsafe.Pointer(&source[0]), 0, nil, nil)
 	if err != C.CL_SUCCESS {
@@ -235,6 +235,18 @@ func Param[E any](v *E) KernelParam {
 	return KernelParam{Size: unsafe.Sizeof(*v), Pointer: unsafe.Pointer(v)}
 }
 
+func (runner *OpenCLRunner) SetKernelArgs(kernelName string, args []KernelParam) error {
+	var kernel = runner.Kernels[kernelName]
+	var err C.cl_int
+	for i, arg := range args {
+		err = C.clSetKernelArg(kernel, C.cl_uint(i), C.size_t(arg.Size), arg.Pointer)
+		if err != C.CL_SUCCESS {
+			return fmt.Errorf("clSetKernelArg Err: %v", err)
+		}
+	}
+	return nil
+}
+
 func (runner *OpenCLRunner) RunKernel(kernelName string, work_dim int,
 	global_work_offset []int, global_work_size []int, local_work_size []int, args []KernelParam, wait bool) error {
 	var kernel = runner.Kernels[kernelName]
@@ -262,7 +274,7 @@ func (runner *OpenCLRunner) RunKernel(kernelName string, work_dim int,
 		_local_work_size := map_size_t(local_work_size)
 		local_work_size_ptr = &_local_work_size[0]
 	}
-	
+
 	var evt *C.cl_event = nil
 	if wait {
 		var evt_obj C.cl_event
@@ -274,7 +286,7 @@ func (runner *OpenCLRunner) RunKernel(kernelName string, work_dim int,
 	if err != C.CL_SUCCESS {
 		return fmt.Errorf("clEnqueueNDRangeKernel Err: %v", err)
 	}
-	
+
 	if wait {
 		err = C.clWaitForEvents(1, evt)
 		if err != C.CL_SUCCESS {
