@@ -1,10 +1,10 @@
-module github.com/dextech/gpu-runner
+module github.com/nexis-dev/ccxminer
 
 go 1.21.0
 
 require (
-	example.com/cn-gpu-go v0.0.0-00010101000000-000000000000
 	github.com/kr/pretty v0.3.1
+	golang.org/x/net v0.17.0
 )
 
 require (
@@ -12,4 +12,3 @@ require (
 	github.com/rogpeppe/go-internal v1.9.0 // indirect
 )
 
-replace example.com/cn-gpu-go => ../cn-gpu-go

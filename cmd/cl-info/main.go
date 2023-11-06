@@ -1,7 +1,7 @@
 package main
 
 import (
-	cl "github.com/dextech/gpu-runner/opencl"
+	cl "github.com/nexis-dev/ccxminer/opencl"
 	"github.com/kr/pretty"
 )
 

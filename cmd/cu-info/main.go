@@ -1,7 +1,7 @@
 package main
 
 import (
-	cu "github.com/dextech/gpu-runner/cuda"
+	cu "github.com/nexis-dev/ccxminer/cuda"
 	"github.com/kr/pretty"
 )
 

@@ -1,14 +1,14 @@
 package main
 
 import (
-	cl "github.com/dextech/gpu-runner/opencl"
+	cl "github.com/nexis-dev/ccxminer/opencl"
 	_ "embed"
 	"fmt"
 	"log"
 	"math"
 	"time"
 	"encoding/binary"
-	"example.com/cn-gpu-go"
+	"github.com/nexis-dev/cn-gpu-go"
 )
 
 //go:embed cn.cl
@@ -73,6 +73,7 @@ func main() {
 	}
 
 	// source
+	// 32 powhash + 32 seedhash + 8 nonce = 72 bytes
 	var source = make([]byte, 60, 60)
 	for i := 0; i < len(source); i++ {
 		source[i] = byte(i)
