@@ -109,6 +109,9 @@ func (miner *Miner) run(pool stratum.PoolIntf) {
 			if err != nil {
 				log.Printf("RunKernel err: %s, %v\n", miner.device.Name, err)
 			} else {
+				if pool.IsFake() {
+					continue
+				}
 				for _, nonce := range output {
 					go func(nonce uint32) {
 						realNonce := job.ExtraNonce + startNonce + uint64(nonce)

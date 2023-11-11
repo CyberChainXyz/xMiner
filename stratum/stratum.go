@@ -40,6 +40,7 @@ type Job struct {
 }
 
 type PoolIntf interface {
+	IsFake() bool
 	LastJob() *Job
 	Url() string
 	SubmitJobWork(*Job, uint64) (bool, error)
@@ -172,6 +173,10 @@ func (pool *Pool) LastJob() *Job {
 
 func (pool *Pool) Url() string {
 	return pool.url
+}
+
+func (pool *Pool) IsFake() bool {
+	return false
 }
 
 func (pool *Pool) SubmitJobWork(job *Job, nonce uint64) (bool, error) {

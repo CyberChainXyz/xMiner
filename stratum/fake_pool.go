@@ -47,6 +47,10 @@ func (pool *FakePool) Url() string {
 	return pool.url
 }
 
+func (pool *FakePool) IsFake() bool {
+	return true
+}
+
 func (pool *FakePool) SubmitJobWork(job *Job, nonce uint64) (bool, error) {
 	return true, nil
 }
