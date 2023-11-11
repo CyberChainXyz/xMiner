@@ -635,12 +635,11 @@ inline void generate_512(uint idx, __local ulong* in, __global ulong* out)
 	}
 }
 
-__attribute__((reqd_work_group_size(8, 8, 1)))
+__attribute__((reqd_work_group_size(1, 1, 1)))
 __kernel void cn0_cn_gpu(__global ulong *input, __global int *Scratchpad, __global ulong *states, uint Threads, ulong extraNonce)
 {
     const uint gIdx = getIdx();
-    __local ulong State_buf[8 * 25];
-	__local ulong* State = State_buf + get_local_id(0) * 25;
+    ulong State[25];
 
 #if(COMP_MODE==1)
     // do not use early return here
@@ -651,15 +650,12 @@ __kernel void cn0_cn_gpu(__global ulong *input, __global int *Scratchpad, __glob
 
         Scratchpad = (__global int*)((__global char*)Scratchpad + MEMORY * gIdx);
 
-        if (get_local_id(1) == 0)
-        {
-
 // NVIDIA
 #ifdef __NV_CL_C_VERSION
 			for(uint i = 0; i < 8; ++i)
 				State[i] = input[i];
 #else
-            ((__local ulong8 *)State)[0] = vload8(0, input);
+            ((ulong8 *)State)[0] = vload8(0, input);
 #endif
             State[8]  = as_ulong(as_uchar8(extraNonce + get_global_id(0)).s76543210);
             // State[8]  = extraNonce + get_global_id(0);
@@ -673,13 +669,12 @@ __kernel void cn0_cn_gpu(__global ulong *input, __global int *Scratchpad, __glob
             // Last bit of padding
             State[16] = 0x8000000000000000UL;
 
-            keccakf1600_2(State);
+            keccakf1600_1(State);
 
             #pragma unroll
             for (int i = 0; i < 25; ++i) {
                 states[i] = State[i];
             }
-        }
 	}
 }
 

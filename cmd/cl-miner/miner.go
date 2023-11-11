@@ -229,7 +229,7 @@ func (miner *Miner) runJob(startNonce uint64) ([]uint32, error) {
 		return nil, fmt.Errorf("WriteBuffer output_buf err: %v", err)
 	}
 
-	err = runner.RunKernel("cn0_cn_gpu", 2, []uint64{startNonce, 1}, []uint64{g_thd, 8}, []uint64{8, 8}, nil, false)
+	err = runner.RunKernel("cn0_cn_gpu", 1, []uint64{startNonce}, []uint64{g_thd}, nil, nil, false)
 	if err != nil {
 		return nil, fmt.Errorf("RunKernel cn0_cn_gpu err: %v", err)
 	}
