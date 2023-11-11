@@ -41,7 +41,7 @@ func main() {
 			return
 		}
 		go miner.run(pool)
-		miners = append(miners, miner)
+		miners[i] = miner
 		log.Printf("New miner %d: %s, maxThreads: %d, workSize: %d\n", miner.index, miner.device.Name, miner.maxThreads, miner.workSize)
 	}
 

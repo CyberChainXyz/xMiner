@@ -120,7 +120,7 @@ func (miner *Miner) run(pool *stratum.Pool) {
 							if result {
 								log.Printf("Solutions accepted: %d-%s, 0x%x\n", miner.index, miner.device.Name, realNonce)
 							} else {
-								log.Printf("Solutions rejected: %d-%s, 0x%v\n", miner.index, miner.device.Name, realNonce)
+								log.Printf("Solutions rejected: %d-%s, 0x%x\n", miner.index, miner.device.Name, realNonce)
 							}
 						}
 					}(nonce)
