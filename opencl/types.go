@@ -31,10 +31,10 @@ type OpenCLPlatform struct {
 	Profile      string
 	Version      string
 	Vendor       string
-	Devices      []OpenCLDevice
+	Devices      []*OpenCLDevice
 }
 
 type OpenCLInfo struct {
 	Platform_count C.cl_uint
-	Platforms      []OpenCLPlatform
+	Platforms      []*OpenCLPlatform
 }

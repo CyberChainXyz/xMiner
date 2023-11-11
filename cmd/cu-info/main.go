@@ -1,8 +1,8 @@
 package main
 
 import (
-	cu "github.com/nexis-dev/ccxminer/cuda"
 	"github.com/kr/pretty"
+	cu "github.com/nexis-dev/ccxminer/cuda"
 )
 
 func main() {

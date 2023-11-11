@@ -1,167 +1,186 @@
-package main
+package stratum
 
 import (
-	"bufio"
-	"crypto/tls"
-	"flag"
+	"context"
+	"encoding/binary"
 	"fmt"
-	"golang.org/x/net/proxy"
-	"net"
-	"net/url"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/rpc"
+	"log"
+	"math"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
-	"encoding/json"
 )
 
-var poolURI = flag.String("pool", "", "Pool URI: scheme://user[.workername][:password]@hostname:port")
-var proxyURI = flag.String("proxy", "", "Proxy: socks5/socks5h://[user][:password]@hostname:port")
-
 type Pool struct {
-	host    string
-	user    *url.Userinfo
-	getwork bool
-	tls     bool
-	proxy   *proxy.Dialer
+	url     string
+	worker  *worker
+	client  *rpc.Client
+	lastJob atomic.Value
 }
 
-type Message struct {
-	method string `json:"method"`
-	params []string    `json:"params"`
-	id int `json:"id"`
-	jsonrpc string `json:"jsonrpc"`
+type worker struct {
+	user  string
+	pass  string
+	agent string
 }
 
-func main() {
-	flag.Parse()
+type Job struct {
+	ReceiveTime        time.Time
+	JobId              string
+	PowHash            []byte
+	SeedHash           []byte
+	Target             uint64
+	BlockNumber        uint64
+	ExtraNonce         uint64
+	ExtraNonceSizeBits int
+	workNonce          *atomic.Uint64
+}
 
-	pool := new(Pool)
+func (job *Job) Input() []byte {
+	input := make([]byte, 72)
+	copy(input[:32], job.PowHash)
+	copy(input[32:64], job.SeedHash)
+	return input
+}
 
-	poolUrl, err := url.Parse(*poolURI)
+func (job *Job) GetNonce(reserveCount uint64) uint64 {
+	return job.workNonce.Add(reserveCount) - reserveCount
+}
+
+func NewPool(url string, user string, pass string, agent string) (*Pool, error) {
+	initCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	client, err := rpc.DialContext(initCtx, url)
 	if err != nil {
-		fmt.Println("Invalid pool URI:", err)
-		return
+		return nil, fmt.Errorf("DialContext Err: %v", err)
 	}
 
-	if poolUrl.Scheme == "" || poolUrl.Host == "" {
-		fmt.Println("Invalid pool URI")
-		return
+	subch := make(chan [6]string)
+	go func() {
+		for {
+			subCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			sub, err := client.EthSubscribe(subCtx, subch, "newWork", user, pass, agent)
+			cancel()
+			if err != nil {
+				log.Println("EthSubscribe Err:", err)
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			log.Println("EthSubscribe lost, resubscribe: ", <-sub.Err())
+		}
+	}()
+
+	pool := Pool{
+		url:    url,
+		client: client,
+		worker: &worker{user, pass, agent},
 	}
 
-	if poolUrl.Scheme == "getwork" || poolUrl.Scheme == "http" {
-		pool.getwork = true
-	} else if poolUrl.Scheme == "stratums" || poolUrl.Scheme == "stratumss" {
-		pool.tls = true
-	} else if !strings.HasPrefix(poolUrl.Scheme, "stratum") {
-		fmt.Println("Invalid pool URI:", "invalid scheme")
-		return
+	go func() {
+		for job := range subch {
+			jobId := job[0]
+
+			if jobId == "" {
+				log.Printf(">> Receive invalid job: jobId is empty")
+				continue
+			}
+
+			powHash, err := hexutil.Decode(job[1])
+			if err != nil || len(powHash) != 32 {
+				log.Println(">> Receive invalid job: powHash")
+				continue
+			}
+			seedHash, err := hexutil.Decode(job[2])
+			if err != nil || len(seedHash) != 32 {
+				log.Println(">> Receive invalid job: seedHash")
+				continue
+			}
+			target, err := strconv.ParseUint(job[3][:18], 0, 64)
+			if err != nil {
+				log.Println(">> Receive invalid job: target")
+				continue
+			}
+			blockNumber, err := hexutil.DecodeUint64(job[4])
+			if err != nil {
+				log.Println(">> Receive invalid job: blockNumber")
+				continue
+			}
+
+			var extraNonce uint64
+			var extraNonceSizeBits int
+
+			if len(job[5]) > 10 {
+				log.Println(">> Receive invalid job: extraNonce")
+				continue
+			}
+
+			if len(job[5]) == 0 {
+				extraNonce = 0
+				extraNonceSizeBits = 0
+			} else {
+				extraNonce, err = strconv.ParseUint(job[5]+strings.Repeat("0", 16-len(job[5])), 16, 64)
+				if err != nil || len(job[5]) > 10 {
+					log.Println(">> Receive invalid job: extraNonce")
+					continue
+				}
+				extraNonceSizeBits = len(job[5]) * 4
+			}
+
+			log.Printf("Receive new job: jobId: %s, blockNumber: %d, difficulty: %d, extraNonce: %s",
+				job[0], blockNumber, math.MaxUint64/target+1, job[5])
+
+			var workNonce atomic.Uint64
+			workNonce.Store(0)
+
+			poolJob := Job{
+				ReceiveTime:        time.Now(),
+				JobId:              jobId,
+				PowHash:            powHash,
+				SeedHash:           seedHash,
+				Target:             target,
+				BlockNumber:        blockNumber,
+				ExtraNonce:         extraNonce,
+				ExtraNonceSizeBits: extraNonceSizeBits,
+				workNonce:          &workNonce,
+			}
+
+			pool.lastJob.Store(&poolJob)
+
+		}
+	}()
+
+	return &pool, nil
+}
+
+func (pool *Pool) LastJob() *Job {
+	v := pool.lastJob.Load()
+	if v == nil {
+		return nil
 	} else {
-		if strings.Contains(poolUrl.Scheme, "+tls") || strings.Contains(poolUrl.Scheme, "+ssl") {
-			pool.tls = true
-		}
+		return v.(*Job)
 	}
-	pool.host = poolUrl.Host
-	pool.user = poolUrl.User
-	
-	if *proxyURI != "" {
-		proxyUrl, err := url.Parse(*proxyURI)
-		if err != nil {
-			fmt.Println("Invalid proxy URI:", err)
-			return
-		}
+}
 
-		if (proxyUrl.Scheme != "socks5" && proxyUrl.Scheme != "socks5h") || poolUrl.Host == "" {
-			fmt.Println("Invalid proxy URI")
-			return
-		}
+func (pool *Pool) Url() string {
+	return pool.url
+}
 
-		proxy, err := proxy.FromURL(proxyUrl, &net.Dialer{Timeout: time.Second * 50})
-		if err != nil {
-			fmt.Println("Invalid proxy URI:", err)
-			return
-		}
-		pool.proxy = &proxy
-	}
+func (pool *Pool) SubmitJobWork(job *Job, nonce uint64) (bool, error) {
+	nonceBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(nonceBytes, nonce)
+	nonceHex := hexutil.Encode(nonceBytes)
 
+	powHashHex := hexutil.Encode(job.PowHash)
+	return pool.SubmitWork(job.JobId, nonceHex, powHashHex)
+}
 
-	serverName := poolUrl.Hostname()
-
-	fmt.Printf("%#v, %s\n", pool, serverName)
-
-	// connect
-	var conn net.Conn
-	if pool.proxy != nil {
-		_conn, err := (*pool.proxy).Dial("tcp", pool.host)
-		if err != nil {
-			fmt.Println("Connect err:", err)
-			return
-		}
-		if pool.tls {
-			_conn = tls.Client(_conn, &tls.Config{ServerName:serverName})
-		}
-		conn = _conn
-	} else {
-		_conn, err := net.DialTimeout("tcp", pool.host, time.Second * 50)
-		if err != nil {
-			fmt.Println("Connect err:", err)
-			return
-		}
-		if pool.tls {
-			_conn = tls.Client(_conn, &tls.Config{ServerName:serverName})
-		}
-		conn = _conn
-	}
-	defer conn.Close()
-
-	// x := bufio.NewReadWriter( bufio.NewReader(conn), bufio.NewWriter(conn))
-	x := bufio.NewReader(conn)
-
-
-	conn.Write([]byte("GET / HTTP/1.2\r\nHost: www.baidu.com\r\nAccept-Language: en-US,en;q=0.5\r\n\r\n"))
-	line, err := x.ReadString('\n')
-	fmt.Println("read http:", line, err)
-
-	sub_msg := Message{
-		id: 1,
-		method: "mining.subscribe",
-		params: []string{"gominer", "EthereumStratum/1.0.0"},
-	}
-	msg, err := json.Marshal(sub_msg)
-	nn, err := conn.Write(msg)
-	fmt.Println("write 1", nn, err)
-	nn, err = conn.Write([]byte("\n"))
-	fmt.Println("write 11", nn, err)
-
-	line, err = x.ReadString('\n')
-	fmt.Println("readline", line, err)
-	
-	auth_msg := Message {
-		id: 2,
-		method: "mining.authorize",
-		params: []string{"user","pass"},
-	}
-	msg, err = json.Marshal(auth_msg)
-	nn, err = conn.Write(msg)
-	fmt.Println("write 2", nn, err)
-	nn, err = conn.Write([]byte("\n"))
-	fmt.Println("write 22", nn, err)
-
-	extra_msg := Message {
-		id: 3,
-		method: "mining.extranonce.subscribe",
-		params: []string{},
-	}
-	msg, err = json.Marshal(extra_msg)
-	nn, err = conn.Write(msg)
-	fmt.Println("write 3", nn, err)
-	nn, err = conn.Write([]byte("\n"))
-	fmt.Println("write 33", nn, err)
-
-	for {
-		line, err = x.ReadString('\n')
-		fmt.Println("readline", line, err)
-		if err != nil {
-			break
-		}
-	}
-
+func (pool *Pool) SubmitWork(jobId string, nonce string, powHash string) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var result bool
+	err := pool.client.CallContext(ctx, &result, "eth_submitWork", jobId, nonce, powHash)
+	return result, err
 }

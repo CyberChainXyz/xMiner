@@ -23,7 +23,7 @@ func TestRunner(t *testing.T) {
 		 }`
 
 	// InitRunner
-	device := &info.Platforms[0].Devices[0]
+	device := info.Platforms[0].Devices[0]
 	runner, err := device.InitRunner()
 	if err != nil {
 		t.Fatal("InitRunner err:", err)
@@ -55,7 +55,7 @@ func TestRunner(t *testing.T) {
 	}
 
 	// RunKernel
-	err = runner.RunKernel("helloworld", 1, nil, []int{itemCount}, nil, []KernelParam{
+	err = runner.RunKernel("helloworld", 1, nil, []uint64{uint64(itemCount)}, nil, []KernelParam{
 		BufferParam(input_buf),
 		BufferParam(output_buf),
 	}, true)

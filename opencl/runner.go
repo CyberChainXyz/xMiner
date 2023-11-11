@@ -216,7 +216,7 @@ func (runner *OpenCLRunner) ReleaseBuffer(buffer *Buffer) error {
 	return nil
 }
 
-func map_size_t[E int](slice []E) []C.size_t {
+func map_size_t[E uint64](slice []E) []C.size_t {
 	size_t_slice := make([]C.size_t, len(slice), len(slice))
 	for i, v := range slice {
 		size_t_slice[i] = C.size_t(v)
@@ -250,7 +250,7 @@ func (runner *OpenCLRunner) SetKernelArgs(kernelName string, args []KernelParam)
 }
 
 func (runner *OpenCLRunner) RunKernel(kernelName string, work_dim int,
-	global_work_offset []int, global_work_size []int, local_work_size []int, args []KernelParam, wait bool) error {
+	global_work_offset []uint64, global_work_size []uint64, local_work_size []uint64, args []KernelParam, wait bool) error {
 	var kernel = runner.Kernels[kernelName]
 	var err C.cl_int
 	for i, arg := range args {

@@ -198,7 +198,7 @@ func getOnePlatform(platform_id C.cl_platform_id) (*OpenCLPlatform, error) {
 
 	for _, device_id := range device_ids {
 		device, _ := getOneDevie(platform.Platform_id, device_id)
-		platform.Devices = append(platform.Devices, *device)
+		platform.Devices = append(platform.Devices, device)
 	}
 
 	return &platform, nil
@@ -224,7 +224,7 @@ func Info() (*OpenCLInfo, error) {
 
 	for _, platform_id := range platform_ids {
 		platform, _ := getOnePlatform(platform_id)
-		info.Platforms = append(info.Platforms, *platform)
+		info.Platforms = append(info.Platforms, platform)
 	}
 
 	return &info, nil

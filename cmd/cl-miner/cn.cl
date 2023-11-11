@@ -13,8 +13,6 @@
   * along with this program.  If not, see <http://www.gnu.org/licenses/>.
   */
 
-// cn0_cn_gpu  cn00_cn_gpu cn1_cn_gpu  cn2
-
 static const __constant ulong keccakf_rndc[24] =
 {
 	0x0000000000000001, 0x0000000000008082, 0x800000000000808a,
@@ -351,6 +349,11 @@ inline uint getIdx()
 	return get_global_id(0) - get_global_offset(0);
 }
 
+inline uint getIdy()
+{
+	return get_global_id(1) - get_global_offset(1);
+}
+
 inline float4 _mm_add_ps(float4 a, float4 b)
 {
 	return a + b;
@@ -633,7 +636,7 @@ inline void generate_512(uint idx, __local ulong* in, __global ulong* out)
 }
 
 __attribute__((reqd_work_group_size(8, 8, 1)))
-__kernel void cn0_cn_gpu(__global ulong *input, __global int *Scratchpad, __global ulong *states, uint Threads)
+__kernel void cn0_cn_gpu(__global ulong *input, __global int *Scratchpad, __global ulong *states, uint Threads, ulong extraNonce)
 {
     const uint gIdx = getIdx();
     __local ulong State_buf[8 * 25];
@@ -658,19 +661,10 @@ __kernel void cn0_cn_gpu(__global ulong *input, __global int *Scratchpad, __glob
 #else
             ((__local ulong8 *)State)[0] = vload8(0, input);
 #endif
-            State[8]  = input[8];
+            State[8]  = as_ulong(as_uchar8(extraNonce + get_global_id(0)).s76543210);
+            // State[8]  = extraNonce + get_global_id(0);
             State[9]  = input[9];
             State[10] = input[10];
-
-            ((__local uint *)State)[9]  &= 0x00FFFFFFU;
-            ((__local uint *)State)[9]  |= (((uint)get_global_id(0)) & 0xFF) << 24;
-            ((__local uint *)State)[10] &= 0xFF000000U;
-            /* explicit cast to `uint` is required because some OpenCL implementations (e.g. NVIDIA)
-             * handle get_global_id and get_global_offset as signed long long int and add
-             * 0xFFFFFFFF... to `get_global_id` if we set on host side a 32bit offset where the first bit is `1`
-             * (even if it is correct casted to unsigned on the host)
-             */
-            ((__local uint *)State)[10] |= (((uint)get_global_id(0) >> 8));
 
             for (int i = 11; i < 25; ++i) {
                 State[i] = 0x00UL;
@@ -910,11 +904,12 @@ __kernel void cn2(__global uint4 *Scratchpad, __global ulong *states, __global u
 
             keccakf1600_2(State);
 
-			if(State[3] <= Target)
+			if(as_ulong(as_uchar8(State[0]).s76543210) <= Target)
+			// if(State[3] <= Target)
 			{
 				ulong outIdx = atomic_inc(output + 0xFF);
 				if(outIdx < 0xFF)
-					output[outIdx] = get_global_id(1);
+					output[outIdx] = getIdy();
 			}
         }
     }
