@@ -4,11 +4,8 @@ import (
 	_ "embed"
 	cl "github.com/nexis-dev/ccxminer/opencl"
 	"github.com/nexis-dev/ccxminer/stratum"
-	// "fmt"
 	"log"
-	// "math"
 	"time"
-	// "encoding/binary"
 )
 
 //go:embed cn.cl
@@ -53,8 +50,12 @@ func main() {
 		return
 	}
 
-	// wait
+	// show miners hahsRate
+	hashRateTick := time.Tick(time.Second * 10)
 	for {
-		time.Sleep(time.Second * 5)
+		<-hashRateTick
+		for _, miner := range miners {
+			log.Printf("Miner %d hashRate: %.3f kH", miner.index, float64(miner.hashRate.Load())/1000)
+		}
 	}
 }

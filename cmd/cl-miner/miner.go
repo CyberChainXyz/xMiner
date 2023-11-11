@@ -5,6 +5,7 @@ import (
 	cl "github.com/nexis-dev/ccxminer/opencl"
 	"github.com/nexis-dev/ccxminer/stratum"
 	"log"
+	"sync/atomic"
 	"time"
 )
 
@@ -20,6 +21,7 @@ type Miner struct {
 	unroll          int
 	workSize        int
 	maxThreads      uint64
+	hashRate        atomic.Uint64
 }
 
 func newMiner(index int, device *cl.OpenCLDevice) (*Miner, error) {
@@ -100,7 +102,10 @@ func (miner *Miner) run(pool *stratum.Pool) {
 				continue
 			}
 			startNonce := job.GetNonce(miner.maxThreads)
+
+			t := time.Now()
 			output, err := miner.runJob(startNonce)
+			miner.hashRate.Store(miner.maxThreads * 1000 / uint64(time.Since(t).Milliseconds()))
 			if err != nil {
 				log.Printf("RunKernel err: %s, %v\n", miner.device.Name, err)
 			} else {
