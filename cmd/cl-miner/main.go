@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"flag"
 	cl "github.com/nexis-dev/ccxminer/opencl"
 	"github.com/nexis-dev/ccxminer/stratum"
 	"log"
@@ -16,11 +17,31 @@ const MEMORY = 32 * 1024
 const MASK = ((MEMORY - 1) >> 6) << 6
 const NonceLen = 4
 
+var mock bool
+var poolUrl string
+var user string
+var pass string
+
+func init() {
+	flag.BoolVar(&mock, "mock", false, "run performance testing")
+	flag.StringVar(&poolUrl, "pool", "ws://127.0.0.1:8546", "pool url")
+	flag.StringVar(&user, "user", "", "username for pool")
+	flag.StringVar(&pass, "pass", "", "password for pool")
+}
+
 func main() {
-	pool, err := stratum.NewPool("ws://127.0.0.1:8546", "user", "pass", "ccxminer")
-	if err != nil {
-		log.Println("newPool Err:", err)
-		return
+	flag.Parse()
+
+	var pool stratum.PoolIntf
+	var err error
+	if mock {
+		pool = stratum.NewFakeFool()
+	} else {
+		pool, err = stratum.NewPool(poolUrl, user, pass, "ccxminer")
+		if err != nil {
+			log.Println("newPool Err:", err)
+			return
+		}
 	}
 
 	log.Printf("Pool connected: %s\n", pool.Url())

@@ -84,7 +84,7 @@ func (miner *Miner) init() error {
 	return nil
 }
 
-func (miner *Miner) run(pool *stratum.Pool) {
+func (miner *Miner) run(pool stratum.PoolIntf) {
 	for {
 		job := pool.LastJob()
 		// wait for first job

@@ -39,6 +39,12 @@ type Job struct {
 	workNonce          *atomic.Uint64
 }
 
+type PoolIntf interface {
+	LastJob() *Job
+	Url() string
+	SubmitJobWork(*Job, uint64) (bool, error)
+}
+
 func (job *Job) Input() []byte {
 	input := make([]byte, 72)
 	copy(input[:32], job.PowHash)
@@ -174,10 +180,10 @@ func (pool *Pool) SubmitJobWork(job *Job, nonce uint64) (bool, error) {
 	nonceHex := hexutil.Encode(nonceBytes)
 
 	powHashHex := hexutil.Encode(job.PowHash)
-	return pool.SubmitWork(job.JobId, nonceHex, powHashHex)
+	return pool.submitWork(job.JobId, nonceHex, powHashHex)
 }
 
-func (pool *Pool) SubmitWork(jobId string, nonce string, powHash string) (bool, error) {
+func (pool *Pool) submitWork(jobId string, nonce string, powHash string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	var result bool
