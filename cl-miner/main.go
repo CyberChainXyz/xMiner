@@ -3,8 +3,8 @@ package main
 import (
 	_ "embed"
 	"flag"
-	cl "github.com/nexis-dev/ccxminer/opencl"
-	"github.com/nexis-dev/ccxminer/stratum"
+	cl "github.com/nexis-dev/go-opencl"
+	stratum "github.com/nexis-dev/stratum-jsonrpc2-ws"
 	"log"
 	"time"
 )
