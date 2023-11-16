@@ -21,12 +21,14 @@ var mock bool
 var poolUrl string
 var user string
 var pass string
+var intensity float64
 
 func init() {
 	flag.BoolVar(&mock, "mock", false, "run performance testing")
 	flag.StringVar(&poolUrl, "pool", "ws://127.0.0.1:8546", "pool url")
 	flag.StringVar(&user, "user", "", "username for pool")
 	flag.StringVar(&pass, "pass", "", "password for pool")
+	flag.Float64Var(&intensity, "intensity", 1, "miner intensity factor")
 }
 
 func main() {
@@ -56,7 +58,7 @@ func main() {
 	// Init miners
 	miners := make([]*Miner, len(devices))
 	for i, device := range devices {
-		miner, err := newMiner(i+1, device)
+		miner, err := newMiner(i+1, device, intensity)
 		if err != nil {
 			log.Printf("init device fail: %v\n", err)
 			return

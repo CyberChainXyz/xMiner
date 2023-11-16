@@ -21,12 +21,15 @@ type Miner struct {
 	unroll          int
 	workSize        int
 	maxThreads      uint64
-	hashRate        atomic.Uint64
+
+	hashLoopNum   uint64
+	hashLastStamp uint64
+	hashRate      atomic.Uint64
 }
 
-func newMiner(index int, device *cl.OpenCLDevice) (*Miner, error) {
+func newMiner(index int, device *cl.OpenCLDevice, intensity float64) (*Miner, error) {
 	miner := &Miner{index: index, device: device}
-	err := miner.init()
+	err := miner.init(intensity)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +40,7 @@ func (miner *Miner) free() {
 	miner.runner.Free()
 }
 
-func (miner *Miner) init() error {
+func (miner *Miner) init(intensity float64) error {
 	device := miner.device
 	runner, err := device.InitRunner()
 	if err != nil {
@@ -47,10 +50,14 @@ func (miner *Miner) init() error {
 	miner.runner = runner
 
 	// kernel constants
-	miner.compMode = 0
+	miner.compMode = 1
 	miner.unroll = 1
 	miner.workSize = min(int(device.Max_work_group_size)/16, 8)
-	miner.maxThreads = uint64(device.Max_compute_units * 6 * 8)
+	miner.maxThreads = uint64(float64(device.Max_compute_units*6*8) * intensity)
+	if miner.maxThreads <= 0 {
+		miner.maxThreads = 100
+	}
+	miner.maxThreads = (((miner.maxThreads + uint64(miner.workSize)) - 1) / uint64(miner.workSize)) * uint64(miner.workSize)
 
 	// CompileKernels
 	codes := []string{cngpucode}
@@ -84,7 +91,34 @@ func (miner *Miner) init() error {
 	return nil
 }
 
+func (miner *Miner) updateStats() {
+	miner.hashLoopNum += 1
+
+	now := uint64(time.Now().UnixMilli())
+	timeDiff := now - miner.hashLastStamp
+	if timeDiff < 1000 {
+		return
+	}
+
+	hashRate := miner.maxThreads * miner.hashLoopNum * 1000 / timeDiff
+	lastHashRate := miner.hashRate.Load()
+	if lastHashRate == 0 {
+		miner.hashRate.Store(hashRate)
+		miner.hashLastStamp = now
+		miner.hashLoopNum = 0
+		return
+	}
+
+	averagingBias := uint64(1)
+	miner.hashRate.Store((lastHashRate*(10-averagingBias) + hashRate*averagingBias) / 10)
+	miner.hashLastStamp = now
+	miner.hashLoopNum = 0
+
+}
+
 func (miner *Miner) run(pool stratum.PoolIntf) {
+	miner.hashLastStamp = uint64(time.Now().UnixMilli())
+	miner.hashLoopNum = 0
 	for {
 		job := pool.LastJob()
 		// wait for first job
@@ -103,9 +137,8 @@ func (miner *Miner) run(pool stratum.PoolIntf) {
 			}
 			startNonce := job.GetNonce(miner.maxThreads)
 
-			t := time.Now()
 			output, err := miner.runJob(startNonce)
-			miner.hashRate.Store(miner.maxThreads * 1000 / uint64(time.Since(t).Milliseconds()))
+			miner.updateStats()
 			if err != nil {
 				log.Printf("RunKernel err: %s, %v\n", miner.device.Name, err)
 			} else {
