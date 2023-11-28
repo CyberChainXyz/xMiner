@@ -1,3 +1,3 @@
-module github.com/nexis-dev/ccxminer
+module github.com/cyberchain/ccxminer
 
 go 1.21.0
