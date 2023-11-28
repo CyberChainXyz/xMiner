@@ -61,8 +61,8 @@ sudo apt install ocl-icd-opencl-dev opencl-headers
 **Clone the repository and build the miner**
 ```bash
 git clone https://github.com/cyberchain/ccxminer)
-cd cl-miner
-go build .
+cd ccxminer
+go build ./cmd/cl-miner/
 ```
 
 ## cu-miner
