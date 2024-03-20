@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	cl "github.com/nexis-dev/go-opencl"
-	stratum "github.com/nexis-dev/stratum-jsonrpc2-ws"
+	cl "github.com/CyberChainXyz/go-opencl"
+	stratum "github.com/CyberChainXyz/stratum-jsonrpc2-ws"
 	"log"
 	"sync/atomic"
 	"time"
@@ -60,7 +60,7 @@ func (miner *Miner) init(intensity float64) error {
 	miner.maxThreads = (((miner.maxThreads + uint64(miner.workSize)) - 1) / uint64(miner.workSize)) * uint64(miner.workSize)
 
 	// CompileKernels
-	codes := []string{cngpucode}
+	codes := []string{fphashClCode}
 	kernelNameList := []string{"cn0_cn_gpu", "cn00_cn_gpu", "cn1_cn_gpu", "cn2"}
 	options := fmt.Sprintf("-DITERATIONS=%d"+" -DMASK=%dU"+" -DWORKSIZE=%dU"+" -DCOMP_MODE=%d"+" -DMEMORY=%dLU"+" -DCN_UNROLL=%d"+" -cl-fp32-correctly-rounded-divide-sqrt", ITERATIONS, MASK, miner.workSize, miner.compMode, MEMORY, miner.unroll)
 

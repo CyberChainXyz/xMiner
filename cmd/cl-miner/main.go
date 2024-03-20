@@ -3,14 +3,14 @@ package main
 import (
 	_ "embed"
 	"flag"
-	cl "github.com/nexis-dev/go-opencl"
-	stratum "github.com/nexis-dev/stratum-jsonrpc2-ws"
+	cl "github.com/CyberChainXyz/go-opencl"
+	stratum "github.com/CyberChainXyz/stratum-jsonrpc2-ws"
 	"log"
 	"time"
 )
 
-//go:embed cn.cl
-var cngpucode string
+//go:embed fphash.cl
+var fphashClCode string
 
 const ITERATIONS = 768
 const MEMORY = 32 * 1024
