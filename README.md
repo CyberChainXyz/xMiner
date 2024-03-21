@@ -1,6 +1,6 @@
 # xMiner
 
-Open source [fphash](https://github.com/CyberChainXyz/fphash-go) miner in Go with [stratum-jsonrpc2.0-ws(https://github.com/CyberChainXyz/stratum-jsonrpc2-ws) protocol protocol.
+Open source [fphash](https://github.com/CyberChainXyz/fphash-go) miner in Go with [stratum-jsonrpc2.0-ws](https://github.com/CyberChainXyz/stratum-jsonrpc2-ws) protocol.
 
 
 The OpenCL kernel code originates from [xmr-stak](https://github.com/fireice-uk/xmr-stak/tree/master/xmrstak/backend).
