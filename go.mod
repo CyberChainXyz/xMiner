@@ -5,6 +5,7 @@ go 1.21.0
 require (
 	github.com/CyberChainXyz/go-opencl v0.0.0-20240318182849-7eadfdd98dce
 	github.com/CyberChainXyz/stratum-jsonrpc2-ws v0.0.0-20240318232235-883dfbf0032c
+	github.com/kr/pretty v0.3.1
 )
 
 require (
@@ -15,6 +16,8 @@ require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/holiman/uint256 v1.2.4 // indirect
+	github.com/kr/text v0.2.0 // indirect
+	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect

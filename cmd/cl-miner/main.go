@@ -5,7 +5,11 @@ import (
 	"flag"
 	cl "github.com/CyberChainXyz/go-opencl"
 	stratum "github.com/CyberChainXyz/stratum-jsonrpc2-ws"
+	"github.com/kr/pretty"
+
 	"log"
+	"os"
+	"strings"
 	"time"
 )
 
@@ -17,22 +21,33 @@ const MEMORY = 32 * 1024
 const MASK = ((MEMORY - 1) >> 6) << 6
 const NonceLen = 4
 
+var showInfo bool
 var mock bool
+var all bool
 var poolUrl string
 var user string
 var pass string
 var intensity float64
 
 func init() {
-	flag.BoolVar(&mock, "mock", false, "run performance testing")
+	flag.BoolVar(&showInfo, "info", false, "Show all OpenCL device informations and exit.")
+	flag.BoolVar(&mock, "mock", false, "Run performance testing.")
+	flag.BoolVar(&all, "all", false, "Use all OpenCL devices, otherwise only AMD and NVIDIA GPU cards.")
 	flag.StringVar(&poolUrl, "pool", "ws://127.0.0.1:8546", "pool url")
 	flag.StringVar(&user, "user", "", "username for pool")
 	flag.StringVar(&pass, "pass", "", "password for pool")
-	flag.Float64Var(&intensity, "intensity", 1, "miner intensity factor")
+	flag.Float64Var(&intensity, "intensity", 1, "Miner intensity factor")
 }
 
 func main() {
 	flag.Parse()
+
+	// Show all OpenCL device informations and exit
+	if showInfo {
+		info, _ := cl.Info()
+		pretty.Println(info)
+		os.Exit(0)
+	}
 
 	var pool stratum.PoolIntf
 	var err error
@@ -52,7 +67,11 @@ func main() {
 	info, _ := cl.Info()
 	var devices []*cl.OpenCLDevice
 	for _, p := range info.Platforms {
-		devices = append(devices, p.Devices...)
+		isAmd := strings.Index(p.Vendor, "Advanced Micro Devices") != -1
+		isNvidia := strings.Index(p.Vendor, "NVIDIA Corporation") != -1 || strings.Index(p.Vendor, "NVIDIA") != -1
+		if all || isAmd || isNvidia {
+			devices = append(devices, p.Devices...)
+		}
 	}
 
 	// Init miners
