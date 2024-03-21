@@ -1,4 +1,4 @@
-module github.com/CyberChainXyz/ccxminer
+module github.com/CyberChainXyz/xMiner
 
 go 1.21.0
 
