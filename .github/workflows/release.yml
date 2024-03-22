@@ -69,12 +69,12 @@ jobs:
       - name: Archive Release
         uses: thedoctor0/zip-release@0.7.6
         with:
-          type: ${{ archive_type }}
-          filename: ${{ archive_name }}
+          type: "${{ archive_type }}"
+          filename: "${{ archive_name }}"
           path: 'xMiner-${{ github.ref_name}}'
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          files : ${{ archive_name }}
+          files : "${{ archive_name }}"
 
