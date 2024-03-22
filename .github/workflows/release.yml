@@ -57,13 +57,17 @@ jobs:
           echo "archive_type=zip" >> "$GITHUB_ENV"
           mkdir xMiner-${{ github.ref_name}} && cd xMiner-${{ github.ref_name}}
           mv ../xMiner.exe ./
-          echo -e 'xMiner.exe -pool=ws://127.0.0.1:8546\r\npause' > solo_mining.bat
+          echo 'xMiner.exe -pool=ws://127.0.0.1:8546' > solo_mining.bat
+          echo 'pause' >> solo_mining.bat
           chmod +x solo_mining.bat
-          echo -e 'xMiner.exe -user=username -pass=password -pool=wss://pool-address.com:port\r\npause' > pool_mining.bat
+          echo 'xMiner.exe -user=username -pass=password -pool=wss://pool-address.com:port\r\npause' > pool_mining.bat
+          echo 'pause' >> pool_mining.bat
           chmod +x pool_mining.bat
-          echo -e 'xMiner.exe -info -all\r\npause' > opencl_info.bat
+          echo 'xMiner.exe -info -all\r\npause' > opencl_info.bat
+          echo 'pause' >> opencl_info.bat
           chmod +x opencl_info.bat
-          echo -e 'xMiner.exe -mock -all\r\npause' > benchmark.bat
+          echo 'xMiner.exe -mock -all\r\npause' > benchmark.bat
+          echo 'pause' >> benchmark.bat
           chmod +x benchmark.bat
 
       - name: Archive Release
