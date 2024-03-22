@@ -33,13 +33,11 @@ jobs:
       - name: Build
         run: |
           go build -v .
-          echo "archive_name=xMiner-${{ runner.os }}-${{ runner.arch }}-${{ github.ref_name }}.tar.gz" >> "$GITHUB_ENV"
 
 
       - name: Prepare files (Linux/Macos)
         if: runner.os != 'Windows'
         run: |
-          echo "archive_type=tar" >> "$GITHUB_ENV"
           mkdir "xMiner-${{ github.ref_name}}" && cd "xMiner-${{ github.ref_name }}"
           mv ../xMiner ./
           echo -e '#!/bin/sh\n./xMiner -pool=ws://127.0.0.1:8546' > solo_mining.sh
@@ -54,7 +52,6 @@ jobs:
       - name: Prepare files (Windows)
         if: runner.os == 'Windows'
         run: |
-          echo "archive_type=zip" >> "$GITHUB_ENV"
           mkdir xMiner-${{ github.ref_name}} && cd xMiner-${{ github.ref_name}}
           mv ../xMiner.exe ./
           echo 'xMiner.exe -pool=ws://127.0.0.1:8546' > solo_mining.bat
@@ -70,15 +67,31 @@ jobs:
           echo 'pause' >> benchmark.bat
           chmod +x benchmark.bat
 
-      - name: Archive Release
+      - name: Archive Release (Windows)
+        if: runner.os == 'Windows'
         uses: thedoctor0/zip-release@0.7.6
         with:
-          type: ${{ env.archive_type }}
-          filename: ${{ env.archive_name }}
+          type: zip
+          filename: xMiner-${{ runner.os }}-${{ runner.arch }}-${{ github.ref_name }}.zip
           path: 'xMiner-${{ github.ref_name}}'
 
-      - name: Release
+      - name: Archive Release (Linux/Macos)
+        if: runner.os != 'Windows'
+        uses: thedoctor0/zip-release@0.7.6
+        with:
+          type: tar
+          filename: xMiner-${{ runner.os }}-${{ runner.arch }}-${{ github.ref_name }}.tar.gz
+          path: 'xMiner-${{ github.ref_name}}'
+
+      - name: Release (Windows)
+        if: runner.os == 'Windows'
         uses: softprops/action-gh-release@v2
         with:
-          files : ${{ env.archive_name }}
+          files: xMiner-${{ runner.os }}-${{ runner.arch }}-${{ github.ref_name }}.zip
+
+      - name: Release (Linux/Macos)
+        if: runner.os != 'Windows'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: xMiner-${{ runner.os }}-${{ runner.arch }}-${{ github.ref_name }}.tar.gz
 
