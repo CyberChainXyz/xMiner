@@ -51,7 +51,7 @@ jobs:
         uses: thedoctor0/zip-release@0.7.6
         with:
           type: 'tar'
-          filename: 'xMiner-{{ runner.os }}-{{ runner.arch }}-{{ github.event.release.tag_name }}.tar.gz'
+          filename: 'xMiner-${{ runner.os }}-${{ runner.arch }}-${{ github.event.release.tag_name }}.tar.gz'
           path: 'xMiner'
 
       - name: Prepare files (Windows)
@@ -72,18 +72,18 @@ jobs:
         uses: thedoctor0/zip-release@0.7.6
         with:
           type: 'zip'
-          filename: 'xMiner-{{ runner.os }}-{{ runner.arch }}-{{ github.event.release.tag_name }}.zip'
+          filename: 'xMiner-${{ runner.os }}-${{ runner.arch }}-${{ github.event.release.tag_name }}.zip'
           path: 'xMiner'
 
       - name: Release (Linux/Macos)
         if: runner.os != 'Windows'
         uses: softprops/action-gh-release@v2
         with:
-          files: 'xMiner-{{ runner.os }}-{{ runner.arch }}-{{ github.event.release.tag_name }}.tar.gz'
+          files: 'xMiner-${{ runner.os }}-${{ runner.arch }}-${{ github.event.release.tag_name }}.tar.gz'
 
       - name: Release (Windows)
         if: runner.os == 'Windows'
         uses: softprops/action-gh-release@v2
         with:
-          files: 'xMiner-{{ runner.os }}-{{ runner.arch }}-{{ github.event.release.tag_name }}.zip'
+          files: 'xMiner-${{ runner.os }}-${{ runner.arch }}-${{ github.event.release.tag_name }}.zip'
 
