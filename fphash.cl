@@ -636,7 +636,7 @@ inline void generate_512(uint idx, __local ulong* in, __global ulong* out)
 	}
 }
 
-__attribute__((reqd_work_group_size(1, 1, 1)))
+// __attribute__((reqd_work_group_size(1, 1, 1)))
 __kernel void cn0_cn_gpu(__global ulong *input, __global int *Scratchpad, __global ulong *states, uint Threads, ulong extraNonce)
 {
     const uint gIdx = getIdx();
