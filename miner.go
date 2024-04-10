@@ -119,6 +119,7 @@ func (miner *Miner) updateStats() {
 func (miner *Miner) run(pool stratum.PoolIntf) {
 	miner.hashLastStamp = uint64(time.Now().UnixMilli())
 	miner.hashLoopNum = 0
+	top_loop:
 	for {
 		job := pool.LastJob()
 		// wait for first job
@@ -141,6 +142,7 @@ func (miner *Miner) run(pool stratum.PoolIntf) {
 			miner.updateStats()
 			if err != nil {
 				log.Printf("RunKernel err: %s, %v\n", miner.device.Name, err)
+				break top_loop
 			} else {
 				if pool.IsFake() {
 					continue
