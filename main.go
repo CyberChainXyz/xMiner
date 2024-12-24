@@ -3,6 +3,7 @@ package main
 import (
 	_ "embed"
 	"flag"
+
 	cl "github.com/CyberChainXyz/go-opencl"
 	stratum "github.com/CyberChainXyz/stratum-jsonrpc2-ws"
 	"github.com/kr/pretty"
@@ -28,6 +29,8 @@ var poolUrl string
 var user string
 var pass string
 var intensity float64
+var cpuThreads int
+var cpuOnly bool
 
 func init() {
 	flag.BoolVar(&showInfo, "info", false, "Show all OpenCL device informations and exit.")
@@ -37,6 +40,8 @@ func init() {
 	flag.StringVar(&user, "user", "", "username for pool")
 	flag.StringVar(&pass, "pass", "", "password for pool")
 	flag.Float64Var(&intensity, "intensity", 1, "Miner intensity factor")
+	flag.IntVar(&cpuThreads, "cpu", -1, "Number of CPU threads (0 = number of CPU cores)")
+	flag.BoolVar(&cpuOnly, "cpu-only", false, "Use CPU mining only (no GPU)")
 }
 
 func main() {
@@ -74,30 +79,50 @@ func main() {
 		}
 	}
 
-	// Init miners
-	miners := make([]*Miner, len(devices))
-	for i, device := range devices {
-		miner, err := newMiner(i+1, device, intensity)
-		if err != nil {
-			log.Printf("init device fail: %v\n", err)
-			return
+	var miners []interface{} // Interface to hold both CPU and GPU miners
+
+	// Initialize CPU miner if requested
+	if cpuThreads >= 0 && !mock {
+		cpuMiner := newCpuMiner(1, cpuThreads)
+		miners = append(miners, cpuMiner)
+		go cpuMiner.run(pool)
+		log.Printf("New CPU miner: threads: %d\n", cpuMiner.threads)
+	}
+
+	// Initialize GPU miners if not in CPU-only mode
+	if !cpuOnly {
+		// Init miners
+		for i, device := range devices {
+			miner, err := newMiner(i+1, device, intensity)
+			if err != nil {
+				log.Printf("init device fail: %v\n", err)
+				continue
+			}
+			go miner.run(pool)
+			miners = append(miners, miner)
+			log.Printf("New GPU miner %d: %s, maxThreads: %d, workSize: %d\n",
+				miner.index, miner.device.Name, miner.maxThreads, miner.workSize)
 		}
-		go miner.run(pool)
-		miners[i] = miner
-		log.Printf("New miner %d: %s, maxThreads: %d, workSize: %d\n", miner.index, miner.device.Name, miner.maxThreads, miner.workSize)
 	}
 
 	if len(miners) == 0 {
-		log.Println("no OpenCL devices")
+		log.Println("no mining devices available")
 		return
 	}
 
-	// show miners hahsRate
+	// Show miners hashRate
 	hashRateTick := time.Tick(time.Second * 10)
 	for {
 		<-hashRateTick
 		for _, miner := range miners {
-			log.Printf("Miner %d hashRate: %.3f kH", miner.index, float64(miner.hashRate.Load())/1000)
+			switch m := miner.(type) {
+			case *Miner:
+				log.Printf("GPU Miner %d hashRate: %.3f kH",
+					m.index, float64(m.hashRate.Load())/1000)
+			case *CpuMiner:
+				log.Printf("CPU Miner %d hashRate: %.3f kH",
+					m.index, float64(m.hashRate.Load())/1000)
+			}
 		}
 	}
 }

@@ -3,6 +3,7 @@ module github.com/CyberChainXyz/xMiner
 go 1.21.0
 
 require (
+	github.com/CyberChainXyz/fphash-go v0.0.0-20241128234324-348a03a8b71c
 	github.com/CyberChainXyz/go-opencl v0.0.0-20240318182849-7eadfdd98dce
 	github.com/CyberChainXyz/stratum-jsonrpc2-ws v0.0.0-20240318232235-883dfbf0032c
 	github.com/kr/pretty v0.3.1
