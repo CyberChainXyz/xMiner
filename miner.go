@@ -119,7 +119,7 @@ func (miner *Miner) updateStats() {
 func (miner *Miner) run(pool stratum.PoolIntf) {
 	miner.hashLastStamp = uint64(time.Now().UnixMilli())
 	miner.hashLoopNum = 0
-	top_loop:
+top_loop:
 	for {
 		job := pool.LastJob()
 		// wait for first job
