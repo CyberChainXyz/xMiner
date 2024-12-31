@@ -8,6 +8,13 @@ The OpenCL kernel code originates from [xmr-stak](https://github.com/fireice-uk/
 
 You can download the pre-built binaries from our [GitHub Releases](https://github.com/CyberChainXyz/xMiner/releases) page. Choose the appropriate version for your operating system.
 
+## Mining Tutorials
+
+Check our [Mining Discussion Forum](https://github.com/orgs/CyberChainXyz/discussions/categories/mining) for detailed tutorials on:
+- Windows Solo Mining
+- HiveOS Mining Setup
+- And more mining guides
+
 ## Performance Testing
 
 ```bash
