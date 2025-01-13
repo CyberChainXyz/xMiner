@@ -45,7 +45,10 @@ You can choose specific devices to mine with using the `-devices` or `-d` flag:
 # or use the short option
 ./xMiner -d 1,3
 
-# Use all available devices (default behavior)
+# Use all OpenCL devices
+./xMiner -all
+
+# Use AMD and NVIDIA GPU devices (default behavior)
 ./xMiner
 ```
 
