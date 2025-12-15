@@ -72,6 +72,18 @@ The default pool address is ws://127.0.0.1:8546.
 ```
 Replace `user, pass, pool` with your actual values provided by the mining pool.
 
+## Proxy
+
+If you need to connect to the pool through an http/socks5 proxy, use `-proxy`.
+
+```bash http proxy
+./xMiner -pool=wss://pool-address.com:port -user=username -pass=password -proxy=http://127.0.0.1:1080
+```
+
+```bash socks5 proxy
+./xMiner -pool=wss://pool-address.com:port -user=username -pass=password -proxy=socks5://127.0.0.1:1080
+```
+
 ## Compile from source
 
 **Requirements**

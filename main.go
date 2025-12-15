@@ -29,6 +29,7 @@ var all bool
 var poolUrl string
 var user string
 var pass string
+var proxy string
 var intensity float64
 var deviceIndices string
 
@@ -39,6 +40,7 @@ func init() {
 	flag.StringVar(&poolUrl, "pool", "ws://127.0.0.1:8546", "pool url")
 	flag.StringVar(&user, "user", "", "username for pool")
 	flag.StringVar(&pass, "pass", "", "password for pool")
+	flag.StringVar(&proxy, "proxy", "", "http/socks5 proxy used for the pool connection (e.g. http://127.0.0.1:1080).")
 	flag.Float64Var(&intensity, "intensity", 1, "Miner intensity factor")
 	flag.StringVar(&deviceIndices, "devices", "", "Comma-separated list of device indices to use (e.g., '1,3,4'). Empty means use all available devices.")
 	flag.StringVar(&deviceIndices, "d", "", "Short for devices")
@@ -99,6 +101,14 @@ func parseDeviceIndices(indices string) map[int]bool {
 
 func main() {
 	flag.Parse()
+
+	// Apply proxy settings before any network connections are created.
+	if proxy != "" {
+		_ = os.Setenv("HTTP_PROXY", proxy)
+		_ = os.Setenv("HTTPS_PROXY", proxy)
+		_ = os.Setenv("http_proxy", proxy)
+		_ = os.Setenv("https_proxy", proxy)
+	}
 
 	// get all OpenCL devices
 	info, _ := cl.Info()
